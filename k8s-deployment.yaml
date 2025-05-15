@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sales-total-realtime-config
+data:
+  application.properties: |
+    # Kafka Configuration
+    kafka.bootstrap.servers=kafka-headless:9092
+    kafka.source.topic=receipt_data
+    kafka.sink.topic=sales_total_realtime
+    kafka.consumer.group=sales-total-group
+    
+    # Schema Registry Configuration
+    schema.registry.url=http://schema-registry:8081
+    
+    # Flink Configuration
+    flink.window.size.seconds=10
+    flink.checkpoint.interval=60000
+    
+    # Application Configuration
+    app.name=sales-total-realtime
+    app.version=1.0.0
+    
+    # Logging
+    logging.level.root=INFO
+    logging.level.com.kafka.sales=DEBUG
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sales-total-realtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sales-total-realtime
+  template:
+    metadata:
+      labels:
+        app: sales-total-realtime
+    spec:
+      containers:
+      - name: sales-total-realtime
+        image: your-registry/sales-total-realtime:latest
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        env:
+        - name: JAVA_OPTS
+          value: "-Xmx1g -Xms1g"
+      volumes:
+      - name: config
+        configMap:
+          name: sales-total-realtime-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sales-total-realtime
+spec:
+  selector:
+    app: sales-total-realtime
+  ports:
+  - port: 8081
+    targetPort: 8081
+  type: ClusterIP

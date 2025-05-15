@@ -1,0 +1,94 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'com.github.davidmc24.gradle.plugin.avro' version '1.9.1'
+}
+
+group = 'com.kafka.sales'
+version = '1.0.0'
+sourceCompatibility = '17'
+
+repositories {
+    mavenCentral()
+    maven {
+        url 'https://packages.confluent.io/maven/'
+    }
+}
+
+// UTF-8 encoding for all Java tasks
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(JavaExec) {
+    systemProperty 'file.encoding', 'UTF-8'
+}
+
+dependencies {
+    // Apache Flink
+    implementation 'org.apache.flink:flink-java:1.18.0'
+    implementation 'org.apache.flink:flink-streaming-java:1.18.0'
+    implementation 'org.apache.flink:flink-clients:1.18.0'
+    
+    // Flink Kafka Connector - Using newer version
+    implementation 'org.apache.flink:flink-connector-kafka:3.0.2-1.18'
+    
+    // Flink Avro
+    implementation 'org.apache.flink:flink-avro:1.18.0'
+    implementation 'org.apache.avro:avro:1.11.3'
+    
+    // Flink Avro Confluent Registry
+    implementation 'org.apache.flink:flink-avro-confluent-registry:1.18.0'
+    
+    // Confluent Kafka Avro Serializer for Schema Registry
+    implementation 'io.confluent:kafka-avro-serializer:7.5.1'
+    
+    // Jackson for JSON
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.15.2'
+    implementation 'com.fasterxml.jackson.core:jackson-annotations:2.15.2'
+    
+    // SLF4J and Logback for logging
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    implementation 'ch.qos.logback:logback-classic:1.4.11'
+    
+    // Testing
+    testImplementation 'junit:junit:4.13.2'
+}
+
+application {
+    mainClass = 'com.kafka.sales.SalesTotalRealtimeApp'
+}
+
+// JAR build configuration
+jar {
+    manifest {
+        attributes 'Main-Class': 'com.kafka.sales.SalesTotalRealtimeApp'
+    }
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+shadowJar {
+    manifest {
+        attributes 'Main-Class': 'com.kafka.sales.SalesTotalRealtimeApp'
+    }
+    configurations = [project.configurations.runtimeClasspath]
+    mergeServiceFiles()
+    append 'META-INF/spring.handlers'
+    append 'META-INF/spring.schemas'
+    append 'META-INF/spring.tooling'
+    transform(com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer) {
+        resource = 'reference.conf'
+    }
+    
+    relocate 'com.google.common', 'com.kafka.sales.shaded.com.google.common'
+    relocate 'com.google.gson', 'com.kafka.sales.shaded.com.google.gson'
+    
+    archiveClassifier.set('')
+    archiveVersion.set('')
+    zip64 = true
+}

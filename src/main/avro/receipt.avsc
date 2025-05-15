@@ -1,0 +1,35 @@
+{
+  "type": "record",
+  "name": "ReceiptData",
+  "namespace": "com.kafka.sales.avro",
+  "fields": [
+    { "name": "franchise_id", "type": "int" },
+    { "name": "store_brand", "type": "string" },
+    { "name": "store_id", "type": "int" },
+    { "name": "store_name", "type": "string" },
+    { "name": "region", "type": "string" },
+    { "name": "store_address", "type": "string" },
+    {
+      "name": "menu_items",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "MenuItem",
+          "fields": [
+            { "name": "menu_id", "type": "int" },
+            { "name": "menu_name", "type": "string" },
+            { "name": "unit_price", "type": "int" },
+            { "name": "quantity", "type": "int" }
+          ]
+        }
+      }
+    },
+    { "name": "total_price", "type": "int" },
+    { "name": "user_id", "type": "int" },
+    { "name": "time", "type": "string" },
+    { "name": "user_name", "type": "string" },
+    { "name": "user_gender", "type": "string" },
+    { "name": "user_age", "type": "int" }
+  ]
+}
