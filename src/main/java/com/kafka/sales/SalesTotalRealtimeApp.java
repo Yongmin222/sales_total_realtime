@@ -19,11 +19,15 @@ import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.util.Properties;
+import java.util.TimeZone;
 
 public class SalesTotalRealtimeApp {
     private static final Logger LOG = LoggerFactory.getLogger(SalesTotalRealtimeApp.class);
     
     public static void main(String[] args) throws Exception {
+        // 기본 시간대를 한국 시간(Asia/Seoul)으로 설정
+        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Seoul"));
+        
         // Load configuration
         Properties appProps = loadApplicationProperties();
         

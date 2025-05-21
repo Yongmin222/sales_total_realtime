@@ -17,11 +17,18 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.TimeZone;
 
 public class DailyCumulativeSalesProcessor extends KeyedProcessFunction<Integer, ReceiptData, SalesTotalData> {
     private static final Logger LOG = LoggerFactory.getLogger(DailyCumulativeSalesProcessor.class);
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
     private static final SimpleDateFormat DATETIME_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    
+    static {
+        // 한국 시간으로 설정
+        DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("Asia/Seoul"));
+        DATETIME_FORMAT.setTimeZone(TimeZone.getTimeZone("Asia/Seoul"));
+    }
     
     // 프랜차이즈별 상태
     private ValueState<Long> totalSalesState;          // 누적 매출
