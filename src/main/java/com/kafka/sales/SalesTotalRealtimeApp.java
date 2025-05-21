@@ -25,18 +25,21 @@ public class SalesTotalRealtimeApp {
     private static final Logger LOG = LoggerFactory.getLogger(SalesTotalRealtimeApp.class);
     
     public static void main(String[] args) throws Exception {
-        // 기본 시간대를 한국 시간(Asia/Seoul)으로 설정
-        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Seoul"));
-        
         // Load configuration
         Properties appProps = loadApplicationProperties();
         
+        // 타임존 설정
+        String timezone = appProps.getProperty("app.timezone", "Asia/Seoul");
+        TimeZone.setDefault(TimeZone.getTimeZone(timezone));
+        LOG.info("Setting timezone to: {}", timezone);
+        
+        // 설정 값 로드
         String bootstrapServers = appProps.getProperty("kafka.bootstrap.servers");
         String sourceTopic = appProps.getProperty("kafka.source.topic");
         String sinkTopic = appProps.getProperty("kafka.sink.topic");
         String consumerGroup = appProps.getProperty("kafka.consumer.group");
         String schemaRegistryUrl = appProps.getProperty("schema.registry.url");
-        int windowSizeSeconds = Integer.parseInt(appProps.getProperty("flink.window.size.seconds", "10"));
+        int parallelism = Integer.parseInt(appProps.getProperty("flink.parallelism", "1"));
         long checkpointInterval = Long.parseLong(appProps.getProperty("flink.checkpoint.interval", "60000"));
         
         LOG.info("Starting Sales Total Realtime Application");
@@ -46,7 +49,7 @@ public class SalesTotalRealtimeApp {
         
         // Set up the execution environment
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(1);  // 로컬 테스트를 위해 병렬 처리를 1로 설정
+        env.setParallelism(parallelism);
         env.enableCheckpointing(checkpointInterval);
         
         // Configure Kafka consumer
@@ -75,8 +78,10 @@ public class SalesTotalRealtimeApp {
         DataStream<ReceiptData> receiptStream = env.addSource(consumer)
             .name("Receipt Data Source")
             .map(receipt -> {
-                LOG.info("Received receipt: franchise_id={}, time={}", 
-                        receipt.getFranchise_id(), receipt.getTime());
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Received receipt: franchise_id={}, time={}", 
+                            receipt.getFranchise_id(), receipt.getTime());
+                }
                 return receipt;
             });
         

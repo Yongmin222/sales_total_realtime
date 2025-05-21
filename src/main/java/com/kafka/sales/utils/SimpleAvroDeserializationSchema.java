@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,42 +29,8 @@ public class SimpleAvroDeserializationSchema<T> implements DeserializationSchema
     private static final byte MAGIC_BYTE = 0x00;
     private static final int SCHEMA_ID_LENGTH = 4;
     
-    // 수동으로 정의한 스키마
-    private static final String SCHEMA_JSON = "{\n" +
-        "  \"type\": \"record\",\n" +
-        "  \"name\": \"ReceiptData\",\n" +
-        "  \"namespace\": \"com.kafka.sales.avro\",\n" +
-        "  \"fields\": [\n" +
-        "    { \"name\": \"franchise_id\", \"type\": \"int\" },\n" +
-        "    { \"name\": \"store_brand\", \"type\": \"string\" },\n" +
-        "    { \"name\": \"store_id\", \"type\": \"int\" },\n" +
-        "    { \"name\": \"store_name\", \"type\": \"string\" },\n" +
-        "    { \"name\": \"region\", \"type\": \"string\" },\n" +
-        "    { \"name\": \"store_address\", \"type\": \"string\" },\n" +
-        "    {\n" +
-        "      \"name\": \"menu_items\",\n" +
-        "      \"type\": {\n" +
-        "        \"type\": \"array\",\n" +
-        "        \"items\": {\n" +
-        "          \"type\": \"record\",\n" +
-        "          \"name\": \"MenuItem\",\n" +
-        "          \"fields\": [\n" +
-        "            { \"name\": \"menu_id\", \"type\": \"int\" },\n" +
-        "            { \"name\": \"menu_name\", \"type\": \"string\" },\n" +
-        "            { \"name\": \"unit_price\", \"type\": \"int\" },\n" +
-        "            { \"name\": \"quantity\", \"type\": \"int\" }\n" +
-        "          ]\n" +
-        "        }\n" +
-        "      }\n" +
-        "    },\n" +
-        "    { \"name\": \"total_price\", \"type\": \"int\" },\n" +
-        "    { \"name\": \"user_id\", \"type\": \"int\" },\n" +
-        "    { \"name\": \"time\", \"type\": \"string\" },\n" +
-        "    { \"name\": \"user_name\", \"type\": \"string\" },\n" +
-        "    { \"name\": \"user_gender\", \"type\": \"string\" },\n" +
-        "    { \"name\": \"user_age\", \"type\": \"int\" }\n" +
-        "  ]\n" +
-        "}";
+    // Avro 스키마 파일 경로
+    private static final String SCHEMA_RESOURCE_PATH = "avro/receipt.avsc";
 
     public SimpleAvroDeserializationSchema(Class<T> targetType) {
         this.targetType = targetType;
@@ -71,8 +38,19 @@ public class SimpleAvroDeserializationSchema<T> implements DeserializationSchema
 
     @Override
     public void open(InitializationContext context) throws Exception {
-        this.schema = new Schema.Parser().parse(SCHEMA_JSON);
-        this.datumReader = new GenericDatumReader<>(schema);
+        try (InputStream schemaInputStream = getClass().getClassLoader().getResourceAsStream(SCHEMA_RESOURCE_PATH)) {
+            if (schemaInputStream == null) {
+                throw new IOException("Avro schema file not found: " + SCHEMA_RESOURCE_PATH);
+            }
+            
+            // 스키마 파일에서 직접 로드
+            this.schema = new Schema.Parser().parse(schemaInputStream);
+            LOG.info("Successfully loaded Avro schema from resource: {}", SCHEMA_RESOURCE_PATH);
+            this.datumReader = new GenericDatumReader<>(schema);
+        } catch (Exception e) {
+            LOG.error("Failed to load Avro schema from resource: {}", SCHEMA_RESOURCE_PATH, e);
+            throw e;
+        }
     }
 
     @Override
@@ -96,7 +74,9 @@ public class SimpleAvroDeserializationSchema<T> implements DeserializationSchema
             // Convert GenericRecord to ReceiptData
             return (T) convertToReceiptData(record);
         } catch (Exception e) {
-            LOG.error("Failed to deserialize Avro message", e);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Failed to deserialize Avro message: {}", e.getMessage());
+            }
             throw new IOException("Failed to deserialize Avro message", e);
         }
     }

@@ -5,7 +5,7 @@
         </encoder>
     </appender>
 
-    <logger name="com.kafka.sales" level="DEBUG"/>
+    <logger name="com.kafka.sales" level="INFO"/>
     <logger name="org.apache.flink" level="INFO"/>
     <logger name="org.apache.kafka" level="INFO"/>
 

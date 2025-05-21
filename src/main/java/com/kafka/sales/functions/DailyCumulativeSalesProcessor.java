@@ -74,7 +74,9 @@ public class DailyCumulativeSalesProcessor extends KeyedProcessFunction<Integer,
         boolean isNewStore = storesState.get(receipt.getStore_id()) == null;
         if (isNewStore) {
             storesState.put(receipt.getStore_id(), true);
-            LOG.info("New store detected: {} for franchise {}", receipt.getStore_id(), receipt.getFranchise_id());
+            if (LOG.isDebugEnabled()) {
+            LOG.debug("New store detected: {} for franchise {}", receipt.getStore_id(), receipt.getFranchise_id());
+        }
         }
         
         // 매출 누적
@@ -106,8 +108,10 @@ public class DailyCumulativeSalesProcessor extends KeyedProcessFunction<Integer,
             DATETIME_FORMAT.format(new Date())
         );
         
-        LOG.info("Cumulative sales for franchise {} brand {}: {} stores, total sales: {}", 
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Cumulative sales for franchise {} brand {}: {} stores, total sales: {}", 
                 receipt.getFranchise_id(), receipt.getStore_brand(), totalStoreCount, currentTotal);
+        }
         
         out.collect(result);
     }

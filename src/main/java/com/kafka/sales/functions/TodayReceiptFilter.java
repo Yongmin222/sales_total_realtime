@@ -23,12 +23,13 @@ public class TodayReceiptFilter implements FilterFunction<ReceiptData> {
         String today = DATE_FORMAT.format(new Date());
         boolean isToday = receipt.getTime().startsWith(today);
         
-        // 디버깅을 위해 모든 데이터 로깅
-        LOG.info("Receipt time: {}, Today: {}, Filter result: {}", 
+        // DEBUG 레벨에서만 로깅하여 성능 개선
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Receipt time: {}, Today: {}, Filter result: {}", 
                  receipt.getTime(), today, isToday);
+        }
         
-        // 임시로 모든 데이터 통과
-        return true;
-        // return isToday;
+        // 실제 필터링 활성화
+        return isToday;
     }
 }

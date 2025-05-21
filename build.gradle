@@ -31,23 +31,15 @@ dependencies {
     implementation 'org.apache.flink:flink-streaming-java:1.18.0'
     implementation 'org.apache.flink:flink-clients:1.18.0'
     
-    // Flink Kafka Connector - Using newer version
+    // Flink Kafka Connector
     implementation 'org.apache.flink:flink-connector-kafka:3.0.2-1.18'
     
-    // Flink Avro
+    // Avro & Schema Registry
     implementation 'org.apache.flink:flink-avro:1.18.0'
     implementation 'org.apache.avro:avro:1.11.3'
     
-    // Flink Avro Confluent Registry
-    implementation 'org.apache.flink:flink-avro-confluent-registry:1.18.0'
-    
-    // Confluent Kafka Avro Serializer for Schema Registry
-    implementation 'io.confluent:kafka-avro-serializer:7.5.1'
-    
     // Jackson for JSON
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
-    implementation 'com.fasterxml.jackson.core:jackson-core:2.15.2'
-    implementation 'com.fasterxml.jackson.core:jackson-annotations:2.15.2'
     
     // SLF4J and Logback for logging
     implementation 'org.slf4j:slf4j-api:2.0.9'
