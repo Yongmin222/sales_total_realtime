@@ -25,6 +25,15 @@ tasks.withType(JavaExec) {
     systemProperty 'file.encoding', 'UTF-8'
 }
 
+// src/main/avro를 resources 소스 디렉토리에 추가
+sourceSets {
+    main {
+        resources {
+            srcDirs = ['src/main/resources', 'src/main/avro']
+        }
+    }
+}
+
 dependencies {
     // Apache Flink
     implementation 'org.apache.flink:flink-java:1.18.0'
