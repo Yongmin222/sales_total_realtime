@@ -5,10 +5,10 @@ import com.kafka.sales.functions.DailyCumulativeSalesProcessor;
 import com.kafka.sales.functions.TodayReceiptFilter;
 import com.kafka.sales.model.ReceiptData;
 import com.kafka.sales.model.SalesTotalData;
+import com.kafka.sales.utils.AppProperties;
 import com.kafka.sales.utils.SalesTotalJsonSerializationSchema;
 import com.kafka.sales.utils.SimpleAvroDeserializationSchema;
 import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer;
@@ -17,7 +17,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.InputStream;
 import java.util.Properties;
 import java.util.TimeZone;
 
@@ -25,106 +24,63 @@ public class SalesTotalRealtimeApp {
     private static final Logger LOG = LoggerFactory.getLogger(SalesTotalRealtimeApp.class);
     
     public static void main(String[] args) throws Exception {
-        // Load configuration
-        Properties appProps = loadApplicationProperties();
-        
         // 타임존 설정
-        String timezone = appProps.getProperty("app.timezone", "Asia/Seoul");
-        TimeZone.setDefault(TimeZone.getTimeZone(timezone));
-        LOG.info("Setting timezone to: {}", timezone);
-        
-        // 설정 값 로드
-        String bootstrapServers = appProps.getProperty("kafka.bootstrap.servers");
-        String sourceTopic = appProps.getProperty("kafka.source.topic");
-        String sinkTopic = appProps.getProperty("kafka.sink.topic");
-        String consumerGroup = appProps.getProperty("kafka.consumer.group");
-        String schemaRegistryUrl = appProps.getProperty("schema.registry.url");
-        int parallelism = Integer.parseInt(appProps.getProperty("flink.parallelism", "1"));
-        long checkpointInterval = Long.parseLong(appProps.getProperty("flink.checkpoint.interval", "60000"));
+        TimeZone.setDefault(TimeZone.getTimeZone(AppProperties.getTimezone()));
+        LOG.info("Setting timezone to: {}", AppProperties.getTimezone());
         
         LOG.info("Starting Sales Total Realtime Application");
-        LOG.info("Bootstrap Servers: {}", bootstrapServers);
-        LOG.info("Source Topic: {}", sourceTopic);
-        LOG.info("Sink Topic: {}", sinkTopic);
+        LOG.info("Source Topic: {} → Sink Topic: {}", AppProperties.getSourceTopic(), AppProperties.getSinkTopic());
+        LOG.info("Bootstrap Servers: {}", AppProperties.getBootstrapServers());
         
-        // Set up the execution environment
+        // Flink 환경 설정
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(parallelism);
-        env.enableCheckpointing(checkpointInterval);
+        env.setParallelism(AppProperties.getParallelism());
+        env.enableCheckpointing(AppProperties.getCheckpointInterval());
         
-        // Configure Kafka consumer
-        Properties consumerProps = new Properties();
-        consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, consumerGroup);
-        consumerProps.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
-        
-        // Create Kafka consumer for Avro data
+        // Kafka Consumer 설정
+        Properties consumerProps = createConsumerProperties();
         FlinkKafkaConsumer<ReceiptData> consumer = new FlinkKafkaConsumer<>(
-            sourceTopic,
+            AppProperties.getSourceTopic(),
             new SimpleAvroDeserializationSchema<>(ReceiptData.class),
             consumerProps
         );
         
-        // Configure Kafka producer
-        Properties producerProps = new Properties();
-        producerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        producerProps.setProperty(ProducerConfig.ACKS_CONFIG, "all");
-        producerProps.setProperty(ProducerConfig.RETRIES_CONFIG, "3");
-        producerProps.setProperty(ProducerConfig.LINGER_MS_CONFIG, "10");
-        producerProps.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "16384");
-        producerProps.setProperty(ProducerConfig.BUFFER_MEMORY_CONFIG, "33554432");
-        
-        // Create data stream from Kafka
-        DataStream<ReceiptData> receiptStream = env.addSource(consumer)
-            .name("Receipt Data Source")
-            .map(receipt -> {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Received receipt: franchise_id={}, time={}", 
-                            receipt.getFranchise_id(), receipt.getTime());
-                }
-                return receipt;
-            });
-        
-        // Filter for today's receipts only
-        DataStream<ReceiptData> todayReceiptStream = receiptStream
-            .filter(new TodayReceiptFilter())
-            .name("Today Receipt Filter");
-        
-        // Key by franchise_id only
-        KeyedStream<ReceiptData, Integer> keyedStream = todayReceiptStream
-            .keyBy(new FranchiseKeySelector());
-        
-        // Process with cumulative state (no windowing)
-        DataStream<SalesTotalData> salesTotalStream = keyedStream
-            .process(new DailyCumulativeSalesProcessor())
-            .name("Daily Cumulative Sales Aggregation");
-        
-        // Create Kafka producer for output
+        // Kafka Producer 설정
+        Properties producerProps = createProducerProperties();
         FlinkKafkaProducer<SalesTotalData> producer = new FlinkKafkaProducer<>(
-            sinkTopic,
-            new SalesTotalJsonSerializationSchema(sinkTopic),
+            AppProperties.getSinkTopic(),
+            new SalesTotalJsonSerializationSchema(AppProperties.getSinkTopic()),
             producerProps,
             FlinkKafkaProducer.Semantic.AT_LEAST_ONCE
         );
         
-        // Add sink to Kafka
-        salesTotalStream.addSink(producer)
-            .name("Sales Total Sink");
+        // 데이터 파이프라인
+        DataStream<SalesTotalData> result = env
+            .addSource(consumer).name("Receipt Data Source")
+            .filter(new TodayReceiptFilter()).name("Today Filter")
+            .keyBy(new FranchiseKeySelector())
+            .process(new DailyCumulativeSalesProcessor()).name("Sales Aggregation")
+            .returns(SalesTotalData.class);
         
-        // Execute the job
-        env.execute("Sales Total Realtime Aggregation");
+        result.addSink(producer).name("Sales Total Sink");
+        
+        // 실행
+        env.execute(AppProperties.getJobName());
     }
     
-    private static Properties loadApplicationProperties() throws Exception {
+    private static Properties createConsumerProperties() {
         Properties props = new Properties();
-        try (InputStream inputStream = SalesTotalRealtimeApp.class
-                .getClassLoader()
-                .getResourceAsStream("application.properties")) {
-            if (inputStream == null) {
-                throw new RuntimeException("application.properties not found in classpath");
-            }
-            props.load(inputStream);
-            return props;
-        }
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, AppProperties.getBootstrapServers());
+        props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, AppProperties.getConsumerGroup());
+        props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        return props;
+    }
+    
+    private static Properties createProducerProperties() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, AppProperties.getBootstrapServers());
+        props.setProperty(ProducerConfig.ACKS_CONFIG, "all");
+        props.setProperty(ProducerConfig.RETRIES_CONFIG, "3");
+        return props;
     }
 }

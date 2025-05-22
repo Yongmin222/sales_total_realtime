@@ -29,8 +29,8 @@ public class SimpleAvroDeserializationSchema<T> implements DeserializationSchema
     private static final byte MAGIC_BYTE = 0x00;
     private static final int SCHEMA_ID_LENGTH = 4;
     
-    // Avro 스키마 파일 경로
-    private static final String SCHEMA_RESOURCE_PATH = "avro/receipt.avsc";
+    // Avro 스키마 파일 경로 - resources에서 읽기
+    private static final String SCHEMA_RESOURCE_PATH = "receipt.avsc";
 
     public SimpleAvroDeserializationSchema(Class<T> targetType) {
         this.targetType = targetType;
@@ -38,18 +38,63 @@ public class SimpleAvroDeserializationSchema<T> implements DeserializationSchema
 
     @Override
     public void open(InitializationContext context) throws Exception {
-        try (InputStream schemaInputStream = getClass().getClassLoader().getResourceAsStream(SCHEMA_RESOURCE_PATH)) {
-            if (schemaInputStream == null) {
-                throw new IOException("Avro schema file not found: " + SCHEMA_RESOURCE_PATH);
+        // 여러 경로에서 스키마 파일 찾기 시도
+        String[] possiblePaths = {
+            "receipt.avsc",                           // classpath root
+            "src/main/avro/receipt.avsc",            // 프로젝트 상대 경로
+            "./src/main/avro/receipt.avsc",          // 현재 디렉토리 기준
+            "../src/main/avro/receipt.avsc",         // 상위 디렉토리 기준
+            "/opt/flink/src/main/avro/receipt.avsc", // 절대 경로 (Flink 실행환경)
+            System.getProperty("user.dir") + "/src/main/avro/receipt.avsc" // 시스템 작업 디렉토리
+        };
+        
+        InputStream schemaInputStream = null;
+        String foundPath = null;
+        
+        // 1. 먼저 classpath에서 시도
+        for (String path : possiblePaths) {
+            if (path.startsWith("/") || path.startsWith("./") || path.startsWith("../") || path.contains(":")) {
+                continue; // 파일 시스템 경로는 나중에 시도
             }
-            
-            // 스키마 파일에서 직접 로드
+            schemaInputStream = getClass().getClassLoader().getResourceAsStream(path);
+            if (schemaInputStream != null) {
+                foundPath = "classpath:" + path;
+                break;
+            }
+        }
+        
+        // 2. classpath에서 못 찾으면 파일 시스템에서 시도
+        if (schemaInputStream == null) {
+            for (String path : possiblePaths) {
+                if (!path.startsWith("/") && !path.startsWith("./") && !path.startsWith("../") && !path.contains(":")) {
+                    continue; // classpath 경로는 이미 시도했음
+                }
+                try {
+                    java.io.File file = new java.io.File(path);
+                    if (file.exists() && file.isFile()) {
+                        schemaInputStream = new java.io.FileInputStream(file);
+                        foundPath = file.getAbsolutePath();
+                        break;
+                    }
+                } catch (Exception e) {
+                    LOG.debug("Failed to load schema from: {}", path);
+                }
+            }
+        }
+        
+        if (schemaInputStream == null) {
+            // 현재 작업 디렉토리 정보 로깅
+            LOG.error("Current working directory: {}", System.getProperty("user.dir"));
+            LOG.error("Tried paths: {}", java.util.Arrays.toString(possiblePaths));
+            throw new IOException("Avro schema file not found in any of the expected locations");
+        }
+        
+        try {
             this.schema = new Schema.Parser().parse(schemaInputStream);
-            LOG.info("Successfully loaded Avro schema from resource: {}", SCHEMA_RESOURCE_PATH);
             this.datumReader = new GenericDatumReader<>(schema);
-        } catch (Exception e) {
-            LOG.error("Failed to load Avro schema from resource: {}", SCHEMA_RESOURCE_PATH, e);
-            throw e;
+            LOG.info("Successfully loaded Avro schema from: {}", foundPath);
+        } finally {
+            schemaInputStream.close();
         }
     }
 
