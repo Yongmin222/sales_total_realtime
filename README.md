@@ -1,5 +1,6 @@
 # 🚀 Sales Total Realtime Application
 
+
 Apache Flink 기반의 실시간 매출 집계 스트리밍 애플리케이션입니다.
 
 ## 📋 프로젝트 개요
@@ -10,6 +11,7 @@ Apache Flink 기반의 실시간 매출 집계 스트리밍 애플리케이션�
 - **오늘 날짜 필터링**: 당일 데이터만 선별하여 처리
 - **상태 기반 처리**: Flink 상태를 이용한 실시간 누적 계산
 - **장애 복구**: 체크포인트 기반 데이터 무손실 보장
+
 
 ### 🔄 **데이터 플로우**
 ```
@@ -28,6 +30,7 @@ Kafka Topic (Avro)     →     Flink Processing     →     Kafka Topic (JSON)
 │  • Receipt Data │    │ • KeyBy Franchise│    │ • Sales Total   │
 │  • Real-time    │    │ • State Aggreg.  │    │ • Real-time     │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
+
 ```
 
 ---
@@ -55,6 +58,7 @@ src/main/
 │   └── 📋 receipt.avsc                        # Avro 스키마 정의
 └── resources/
     └── ⚙️ application.properties              # 애플리케이션 설정
+
 ```
 
 ### 🔧 **핵심 컴포넌트**
@@ -164,6 +168,7 @@ java --add-opens java.base/java.util=ALL-UNNAMED \
 ---
 
 ## 🔍 모니터링 및 로깅
+
 
 ### 📈 **주요 메트릭**
 - **처리량**: 초당 처리되는 영수증 수
@@ -329,6 +334,8 @@ linger.ms=5
 - **가용성**: 99.9% 이상
 - **데이터 정확도**: 100%
 
+
 ---
 
-*마지막 업데이트: 2025-05-22*
+Apache License 2.0
+
